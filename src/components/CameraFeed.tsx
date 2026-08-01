@@ -24,7 +24,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 const DETECT_INTERVAL_MS = 800;
-const DETECT_W = 256;
+const DETECT_W = 640;
 
 function useUtcClock() {
   const [now, setNow] = useState(() => new Date());
@@ -226,7 +226,7 @@ export function CameraFeed({ camera, detection, large, onStream }: Props) {
       }
 
       const blob = await new Promise<Blob | null>((res) =>
-        canvas.toBlob((b) => res(b), "image/jpeg", 0.6)
+        canvas.toBlob((b) => res(b), "image/jpeg", 0.75)
       ).catch(() => null);
       if (!blob || stopped) return;
 

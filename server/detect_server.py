@@ -49,7 +49,8 @@ ALARM_MIN_HITS = 2     # fire-positive frames inside the window -> ALARM
 MAX_HISTORY_S = 30.0   # prune per-camera history older than this
 
 MODEL_PATH = Path(__file__).resolve().with_name("models") / "best.pt"
-CONF_THRESHOLD = 0.30
+FIRE_CONF_THRESHOLD = 0.20
+SMOKE_CONF_THRESHOLD = 0.30
 
 # --------------------------------------------------------------------------
 # Model loading
@@ -205,7 +206,10 @@ def _detect_yolo(jpeg_bytes: bytes):
             label = _model.names.get(int(cls), "unknown")
             if label == "other":
                 continue
-            if float(conf) < CONF_THRESHOLD:
+            min_conf = (
+                FIRE_CONF_THRESHOLD if label == "fire" else SMOKE_CONF_THRESHOLD
+            )
+            if float(conf) < min_conf:
                 continue
             out.append(
                 {
