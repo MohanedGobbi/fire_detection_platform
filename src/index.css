@@ -1,0 +1,127 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* minimal design system — light, restrained, whitespace-driven */
+    --background: 60 9% 95.7%; /* #F4F4F1 surface */
+    --foreground: 60 9% 4.5%; /* #0C0C09 text */
+    --card: 0 0% 100%;
+    --card-foreground: 60 9% 4.5%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 60 9% 4.5%;
+    --primary: 60 9% 4.5%; /* #0C0C09 */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 244 48% 34%; /* #312C85 */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 60 6% 92%;
+    --muted-foreground: 60 2% 43%; /* #6E6E67 */
+    --accent: 60 6% 92%;
+    --accent-foreground: 60 9% 4.5%;
+    --destructive: 0 72% 51%; /* #DC2626 */
+    --destructive-foreground: 0 0% 100%;
+    --border: 60 6% 88%;
+    --input: 60 6% 88%;
+    --ring: 244 48% 34%;
+    --radius: 4px;
+
+    /* semantic tokens (component aliases kept stable) */
+    --ember: #dc2626; /* danger */
+    --amber: #d97706; /* warning */
+    --phosphor: #16a34a; /* success */
+    --bone: #0c0c09; /* text */
+    --ash: #6e6e67; /* muted text */
+    --coal: #ffffff; /* panel */
+    --soot: #f4f4f1; /* surface / hover */
+    --indigo: #312c85; /* accent */
+    --hairline: #e4e4dd;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Open Sans", system-ui, sans-serif;
+    font-feature-settings: "tnum";
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: var(--indigo);
+    color: #fff;
+  }
+  :focus-visible {
+    outline: 2px solid var(--indigo);
+    outline-offset: 1px;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: "Inter", system-ui, sans-serif;
+  }
+  .micro-label {
+    font-family: "Inconsolata", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ash);
+  }
+  .text-ember {
+    color: var(--ember);
+  }
+  .text-amber-sig {
+    color: var(--amber);
+  }
+  .text-phosphor {
+    color: var(--phosphor);
+  }
+  .text-bone {
+    color: var(--bone);
+  }
+  .text-ash {
+    color: var(--ash);
+  }
+  .bg-coal {
+    background-color: var(--coal);
+  }
+  .bg-soot {
+    background-color: var(--soot);
+  }
+  .hairline {
+    border-color: var(--hairline);
+  }
+}
+
+@keyframes alert-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.anim-alert-in {
+  animation: alert-in 0.25s ease-out both;
+}
+
+/* thin scrollbars for rails */
+.thin-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: #d8d8d0;
+}
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
