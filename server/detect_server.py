@@ -12,19 +12,17 @@ POST /detect?camera_id=CAM-1    body: JPEG bytes
                                 -> {"detections": [{x,y,w,h,confidence,label}],
                                     "alarm": bool, "detector": "..."}
 
-Detector v1: classical computer vision (no downloads, runs on CPU):
-  * flame  — HSV color model (red/orange/yellow, high saturation/brightness,
-             R>G>B ordering rule) + connected-component region analysis
-  * smoke  — low-saturation neutral-bright region analysis
-  * alarm  — temporal persistence: >= ALARM_MIN_HITS fire frames inside
-             ALARM_WINDOW_S per camera. Smoke alone never alarms; it reports
-             as a lower-confidence "smoke" detection.
+Detector:
+  * If server/models/best.pt exists and ultralytics is installed, a YOLOv8
+    fire/smoke model is used (classes: fire, smoke; "other" is ignored).
+  * Otherwise the previous classical heuristic detector is used.
 
-Swap-in point for deep models: if server/models/fire.onnx exists and
-onnxruntime is installed, replace detect() with ONNX inference — the HTTP
-contract stays identical.
+Alarm authority:
+  * Temporal persistence: >= ALARM_MIN_HITS fire frames inside
+    ALARM_WINDOW_S per camera. Smoke alone never raises an alarm.
 
-Dependencies: Pillow + numpy only (both in the managed runtime). Stdlib HTTP.
+Swap-in point for other deep models: drop an ONNX/PT file in server/models/
+and replace detect() with your inference — the HTTP contract stays identical.
 """
 
 from __future__ import annotations
@@ -35,7 +33,8 @@ import json
 import time
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 import numpy as np
 from PIL import Image
@@ -44,12 +43,38 @@ from PIL import Image
 # Configuration
 # --------------------------------------------------------------------------
 
-MAX_W = 256            # frames are downscaled to this width before analysis
+MAX_W = 256            # heuristic-only: frames are downscaled before analysis
 ALARM_WINDOW_S = 8.0   # sliding window for temporal persistence
 ALARM_MIN_HITS = 2     # fire-positive frames inside the window -> ALARM
 MAX_HISTORY_S = 30.0   # prune per-camera history older than this
 
+MODEL_PATH = Path(__file__).resolve().with_name("models") / "best.pt"
+CONF_THRESHOLD = 0.30
+
+# --------------------------------------------------------------------------
+# Model loading
+# --------------------------------------------------------------------------
+
+_model = None
 DETECTOR_NAME = "heuristic-hsv-v1"
+
+
+def load_model():
+    """Load the YOLO fire/smoke model if available."""
+    global _model, DETECTOR_NAME
+    if _model is not None:
+        return
+    if not MODEL_PATH.exists():
+        return
+    try:
+        from ultralytics import YOLO
+
+        _model = YOLO(str(MODEL_PATH), verbose=False)
+        DETECTOR_NAME = "yolov8-fire-smoke"
+        print(f"[pyrophyte] loaded model: {MODEL_PATH}")
+    except Exception as e:
+        print(f"[pyrophyte] failed to load {MODEL_PATH}: {e}; using heuristic fallback")
+
 
 # --------------------------------------------------------------------------
 # Detection
@@ -130,8 +155,8 @@ def label_regions(mask: np.ndarray, label: str, min_frac: float, base_conf: floa
     return out[:6]
 
 
-def detect(jpeg_bytes: bytes):
-    """Run the detector on one JPEG frame. Returns list of detections."""
+def _detect_heuristic(jpeg_bytes: bytes):
+    """Run the classical CV detector on one JPEG frame."""
     img = Image.open(io.BytesIO(jpeg_bytes)).convert("RGB")
     w, h = img.size
     if w > MAX_W:
@@ -163,6 +188,44 @@ def detect(jpeg_bytes: bytes):
     detections += label_regions(smoke, "smoke", min_frac=0.01, base_conf=0.30)
     detections.sort(key=lambda d: d["confidence"], reverse=True)
     return detections[:6]
+
+
+def _detect_yolo(jpeg_bytes: bytes):
+    """Run the YOLO fire/smoke model on one JPEG frame."""
+    img = Image.open(io.BytesIO(jpeg_bytes)).convert("RGB")
+    W, H = img.size
+    results = _model(img, verbose=False)[0]
+    boxes = results.boxes
+    out = []
+    if boxes is not None and len(boxes) > 0:
+        xyxy = boxes.xyxy.cpu().numpy()
+        confs = boxes.conf.cpu().numpy()
+        clses = boxes.cls.cpu().numpy().astype(int)
+        for (x1, y1, x2, y2), conf, cls in zip(xyxy, confs, clses):
+            label = _model.names.get(int(cls), "unknown")
+            if label == "other":
+                continue
+            if float(conf) < CONF_THRESHOLD:
+                continue
+            out.append(
+                {
+                    "x": round(float(x1) / W, 4),
+                    "y": round(float(y1) / H, 4),
+                    "w": round((float(x2) - float(x1)) / W, 4),
+                    "h": round((float(y2) - float(y1)) / H, 4),
+                    "confidence": round(float(conf), 2),
+                    "label": label,
+                }
+            )
+    out.sort(key=lambda d: d["confidence"], reverse=True)
+    return out[:10]
+
+
+def detect(jpeg_bytes: bytes):
+    """Run the configured detector on one JPEG frame."""
+    if _model is not None:
+        return _detect_yolo(jpeg_bytes)
+    return _detect_heuristic(jpeg_bytes)
 
 
 # --------------------------------------------------------------------------
@@ -257,6 +320,9 @@ def main():
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8700)
     args = ap.parse_args()
+
+    load_model()
+
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"[pyrophyte] detection server on http://{args.host}:{args.port}")
     print(f"[pyrophyte] detector: {DETECTOR_NAME} — POST /detect?camera_id=<id>")

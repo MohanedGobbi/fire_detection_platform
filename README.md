@@ -6,14 +6,31 @@ authority that raises fire alarms.
 
 ## Run it
 
-**1. Detection server** (terminal 1):
+**1. Install Python deps** (one time):
+
+```bash
+pip install -r server/requirements.txt
+```
+
+**2. Download the fire/smoke model** (one time):
+
+```bash
+mkdir -p server/models
+curl -L -o server/models/best.pt \
+  https://huggingface.co/SalahALHaismawi/yolov26-fire-detection/resolve/main/best.pt
+```
+
+The detector automatically falls back to the classical heuristic if the model
+is missing.
+
+**3. Detection server** (terminal 1):
 
 ```bash
 python server/detect_server.py --port 8700
 # or double-click start-detection-server.bat
 ```
 
-**2. Web console** (terminal 2):
+**4. Web console** (terminal 2):
 
 ```bash
 npm install
@@ -31,8 +48,7 @@ webcam / HLS / MJPEG camera ──► browser feed ──► JPEG frame every 80
                                                         │
                                                         ▼ POST /detect?camera_id=…
                                           server/detect_server.py (port 8700)
-                                          · HSV flame color model (R>G>B rule)
-                                          · smoke region analysis
+                                          · YOLOv8 fire/smoke model
                                           · temporal persistence: ≥2 fire frames
                                             in 8s per camera ⇒ ALARM
                                                         │
@@ -51,13 +67,11 @@ webcam / HLS / MJPEG camera ──► browser feed ──► JPEG frame every 80
 Coordinates are normalized `[0,1]`. `label` is `fire` or `smoke`. Only `fire`
 contributes to alarms.
 
-## Swapping in a deep model
+## Swapping the model
 
-Detector v1 is a classical CV heuristic — real, but tuned for sensitivity, not
-precision. To use a trained model (e.g. YOLO fire/smoke weights), drop an ONNX
-file in `server/models/` and replace `detect()` in
-`server/detect_server.py` with ONNX Runtime inference. The HTTP contract and
-the alarm logic stay identical — the UI needs no changes.
+`server/detect_server.py` loads `server/models/best.pt` with `ultralytics` if
+available. To use a different YOLO checkpoint, replace that file. The HTTP
+contract and alarm logic stay identical — the UI needs no changes.
 
 ## Camera notes
 
