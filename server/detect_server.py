@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import threading
 import time
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -38,6 +39,13 @@ from urllib.parse import parse_qs, urlparse
 
 import numpy as np
 from PIL import Image
+
+try:
+    import torch
+
+    torch.set_num_threads(max(1, torch.get_num_threads()))
+except ImportError:
+    torch = None
 
 # --------------------------------------------------------------------------
 # Configuration
@@ -57,6 +65,7 @@ SMOKE_CONF_THRESHOLD = 0.30
 # --------------------------------------------------------------------------
 
 _model = None
+_infer_lock = threading.Lock()
 DETECTOR_NAME = "heuristic-hsv-v1"
 
 
@@ -195,7 +204,9 @@ def _detect_yolo(jpeg_bytes: bytes):
     """Run the YOLO fire/smoke model on one JPEG frame."""
     img = Image.open(io.BytesIO(jpeg_bytes)).convert("RGB")
     W, H = img.size
-    results = _model(img, verbose=False)[0]
+    # Ultralytics/torch forward passes are not thread-safe — serialize them.
+    with _infer_lock:
+        results = _model(img, verbose=False)[0]
     boxes = results.boxes
     out = []
     if boxes is not None and len(boxes) > 0:

@@ -200,21 +200,29 @@ export function CameraFeed({ camera, detection, large, onStream }: Props) {
     }
     let stopped = false;
     let failures = 0;
+    let busy = false;
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
     const tick = async () => {
-      if (stopped) return;
+      if (stopped || busy) return;
+      busy = true;
       const media: HTMLVideoElement | HTMLImageElement | null =
         camera.type === "mjpeg" ? imgRef.current : videoRef.current;
-      if (!media || !ctx) return;
+      if (!media || !ctx) {
+        busy = false;
+        return;
+      }
       const mw =
         media instanceof HTMLVideoElement ? media.videoWidth : media.naturalWidth;
       const mh =
         media instanceof HTMLVideoElement
           ? media.videoHeight
           : media.naturalHeight;
-      if (!mw || !mh) return;
+      if (!mw || !mh) {
+        busy = false;
+        return;
+      }
 
       canvas.width = DETECT_W;
       canvas.height = Math.max(1, Math.round((mh / mw) * DETECT_W));
@@ -222,22 +230,25 @@ export function CameraFeed({ camera, detection, large, onStream }: Props) {
         ctx.drawImage(media, 0, 0, canvas.width, canvas.height);
       } catch {
         setDetOffline("frame blocked by CORS");
+        busy = false;
         return;
       }
 
       const blob = await new Promise<Blob | null>((res) =>
         canvas.toBlob((b) => res(b), "image/jpeg", 0.75)
       ).catch(() => null);
-      if (!blob || stopped) return;
+      if (!blob || stopped) {
+        busy = false;
+        return;
+      }
 
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 10000);
       try {
-        const ctrl = new AbortController();
-        const timeout = setTimeout(() => ctrl.abort(), 4000);
         const res = await fetch(
           `${detection.serverUrl}/detect?camera_id=${encodeURIComponent(camera.id)}`,
           { method: "POST", body: blob, signal: ctrl.signal }
         );
-        clearTimeout(timeout);
         if (!res.ok) throw new Error(`server ${res.status}`);
         const data = (await res.json()) as {
           detections: Detection[];
@@ -255,6 +266,9 @@ export function CameraFeed({ camera, detection, large, onStream }: Props) {
           setDetOffline("detection server unreachable");
           setDetections([]);
         }
+      } finally {
+        clearTimeout(timeout);
+        busy = false;
       }
     };
 
