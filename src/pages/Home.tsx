@@ -4,6 +4,7 @@ import { CameraDialog } from "@/components/CameraDialog";
 import { CameraRail } from "@/components/CameraRail";
 import { TopBar } from "@/components/TopBar";
 import { CameraDetailPanel, EventLog } from "@/components/StatusPanels";
+import { GlobalMap } from "@/components/GlobalMap";
 import { useCameras } from "@/hooks/useCameras";
 import type { CameraConfig, DetectionSettings } from "@/types/camera";
 import { Plus } from "lucide-react";
@@ -25,6 +26,7 @@ export default function Home() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<CameraConfig | null>(null);
   const [detectionEnabled, setDetectionEnabled] = useState(true);
+  const [viewMode, setViewMode] = useState<"cameras" | "map">("cameras");
 
   const detection: DetectionSettings = {
     enabled: detectionEnabled,
@@ -65,6 +67,8 @@ export default function Home() {
         detectionEnabled={detectionEnabled}
         onDetectionToggle={setDetectionEnabled}
         serverUrl={DETECTION_SERVER}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
       />
 
       <div className="flex min-h-0 flex-1">
@@ -80,7 +84,12 @@ export default function Home() {
 
         {/* main stage */}
         <main className="flex min-w-0 flex-1 flex-col bg-soot">
-          {selected ? (
+          {viewMode === "map" ? (
+            <GlobalMap cameras={cameras} streams={streams} onSelectCamera={(id) => {
+              setSelectedId(id);
+              setViewMode("cameras");
+            }} />
+          ) : selected ? (
             <>
               <div className="border-b hairline bg-coal">
                 <div className="flex items-center justify-between px-4 py-2">

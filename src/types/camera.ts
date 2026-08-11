@@ -8,7 +8,9 @@ export interface CameraConfig {
   url?: string;
   /** webcam: MediaDeviceInfo.deviceId */
   deviceId?: string;
-  location?: string; // free text, e.g. "45.9231°N 121.4822°W · Ridge A-1"
+  location?: string; // free text description
+  lat?: number;      // latitude for global map placement
+  lng?: number;      // longitude for global map placement
   notes?: string;
   createdAt: number;
 }
