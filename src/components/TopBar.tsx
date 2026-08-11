@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { CameraConfig, StreamInfo } from "@/types/camera";
-import { Flame } from "lucide-react";
+import { Flame, Globe, Video } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 interface Props {
@@ -9,6 +9,8 @@ interface Props {
   detectionEnabled: boolean;
   onDetectionToggle: (on: boolean) => void;
   serverUrl: string;
+  viewMode: "cameras" | "map";
+  onViewModeChange: (mode: "cameras" | "map") => void;
 }
 
 export function TopBar({
@@ -17,6 +19,8 @@ export function TopBar({
   detectionEnabled,
   onDetectionToggle,
   serverUrl,
+  viewMode,
+  onViewModeChange,
 }: Props) {
   const [now, setNow] = useState(() => new Date());
   const [serverOk, setServerOk] = useState<boolean | null>(null);
@@ -65,6 +69,32 @@ export function TopBar({
           </div>
           <div className="micro-label mt-1">Fire Detection Platform</div>
         </div>
+      </div>
+
+      {/* View Toggle */}
+      <div className="hidden lg:flex items-center bg-soot border hairline rounded-sm p-0.5">
+        <button
+          onClick={() => onViewModeChange("cameras")}
+          className={`flex items-center gap-2 px-4 py-1.5 rounded-sm text-xs font-semibold tracking-wide transition-colors ${
+            viewMode === "cameras"
+              ? "bg-coal text-bone shadow-sm"
+              : "text-ash hover:text-bone"
+          }`}
+        >
+          <Video className="w-3.5 h-3.5" />
+          LOCAL CAMERAS
+        </button>
+        <button
+          onClick={() => onViewModeChange("map")}
+          className={`flex items-center gap-2 px-4 py-1.5 rounded-sm text-xs font-semibold tracking-wide transition-colors ${
+            viewMode === "map"
+              ? "bg-coal text-bone shadow-sm"
+              : "text-ash hover:text-bone"
+          }`}
+        >
+          <Globe className="w-3.5 h-3.5" />
+          GLOBAL MAP
+        </button>
       </div>
 
       <div className="hidden items-center gap-8 md:flex">

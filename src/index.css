@@ -125,3 +125,24 @@
 .thin-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* Leaflet Popup Overrides */
+.camera-popup .leaflet-popup-content-wrapper {
+  background: var(--coal);
+  color: var(--bone);
+  border-radius: 4px;
+  padding: 0;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  border: 1px solid var(--hairline);
+}
+.camera-popup .leaflet-popup-content {
+  margin: 0;
+  line-height: normal;
+}
+.camera-popup .leaflet-popup-tip-container {
+  display: none;
+}
+.custom-leaflet-icon {
+  background: transparent;
+  border: none;
+}

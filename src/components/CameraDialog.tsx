@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Camera, Globe, Video } from "lucide-react";
+import { Camera, Globe, Video, MapPin } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -45,8 +45,12 @@ export function CameraDialog({ open, onOpenChange, editing, onSubmit }: Props) {
   const [url, setUrl] = useState("");
   const [deviceId, setDeviceId] = useState("");
   const [location, setLocation] = useState("");
+  const [lat, setLat] = useState("");
+  const [lng, setLng] = useState("");
   const [devices, setDevices] = useState<VideoDevice[]>([]);
   const [deviceError, setDeviceError] = useState<string>();
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [gpsError, setGpsError] = useState<string>();
 
   /* prefill when editing */
   useEffect(() => {
@@ -56,6 +60,8 @@ export function CameraDialog({ open, onOpenChange, editing, onSubmit }: Props) {
       setUrl(editing?.url ?? "");
       setDeviceId(editing?.deviceId ?? "");
       setLocation(editing?.location ?? "");
+      setLat(editing?.lat?.toString() ?? "");
+      setLng(editing?.lng?.toString() ?? "");
       setDeviceError(undefined);
     }
   }, [open, editing]);
@@ -93,6 +99,49 @@ export function CameraDialog({ open, onOpenChange, editing, onSubmit }: Props) {
     name.trim().length > 0 &&
     (type === "webcam" ? true : url.trim().length > 0);
 
+  const handleDetectGPS = () => {
+    if (!navigator.geolocation) {
+      setGpsError("GPS is not supported by your browser");
+      return;
+    }
+    
+    setGpsLoading(true);
+    setGpsError(undefined);
+    
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
+        setLat(latitude.toFixed(6));
+        setLng(longitude.toFixed(6));
+        
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=14`
+          );
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.name) {
+              setLocation(data.name + (data.address?.city ? `, ${data.address.city}` : ''));
+            } else if (data && data.display_name) {
+              // fallback to a shorter version of display_name if name is not available
+              const parts = data.display_name.split(", ");
+              setLocation(parts.slice(0, 3).join(", "));
+            }
+          }
+        } catch (e) {
+          console.error("Reverse geocoding failed", e);
+        }
+
+        setGpsLoading(false);
+      },
+      (error) => {
+        setGpsError("Unable to retrieve your location");
+        setGpsLoading(false);
+      }
+    );
+  };
+
   const submit = () => {
     if (!valid) return;
     onSubmit({
@@ -101,6 +150,8 @@ export function CameraDialog({ open, onOpenChange, editing, onSubmit }: Props) {
       url: type === "webcam" ? undefined : url.trim(),
       deviceId: type === "webcam" ? deviceId || undefined : undefined,
       location: location.trim() || undefined,
+      lat: lat.trim() ? parseFloat(lat) : undefined,
+      lng: lng.trim() ? parseFloat(lng) : undefined,
     });
     onOpenChange(false);
   };
@@ -194,13 +245,49 @@ export function CameraDialog({ open, onOpenChange, editing, onSubmit }: Props) {
           )}
 
           <div className="grid gap-1.5">
-            <Label className="micro-label">Location (optional)</Label>
+            <Label className="micro-label">Location Name (optional)</Label>
             <Input
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g. 45.9231°N 121.4822°W · Sector A-1"
+              placeholder="e.g. Sector A-1"
               className="border-[var(--hairline)] bg-soot text-bone placeholder:text-ash/50"
             />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <Label className="micro-label">Coordinates</Label>
+            <button 
+              type="button" 
+              onClick={handleDetectGPS}
+              disabled={gpsLoading}
+              className="flex items-center gap-1 text-[10px] uppercase font-bold tracking-wider text-[var(--indigo)] hover:text-[var(--phosphor)] transition-colors disabled:opacity-50"
+            >
+              <MapPin className="w-3 h-3" />
+              {gpsLoading ? "Detecting..." : "Auto Detect GPS"}
+            </button>
+          </div>
+          {gpsError && <p className="text-[10px] text-ember mt-[-4px] mb-1">{gpsError}</p>}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-1.5">
+              <Input
+                type="number"
+                step="any"
+                value={lat}
+                onChange={(e) => setLat(e.target.value)}
+                placeholder="e.g. 45.9231"
+                className="border-[var(--hairline)] bg-soot text-bone placeholder:text-ash/50"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Input
+                type="number"
+                step="any"
+                value={lng}
+                onChange={(e) => setLng(e.target.value)}
+                placeholder="e.g. -121.4822"
+                className="border-[var(--hairline)] bg-soot text-bone placeholder:text-ash/50"
+              />
+            </div>
           </div>
         </div>
 
