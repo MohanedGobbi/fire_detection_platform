@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PYROPHYTE detection server.
+FireDetect detection server.
 
 Cameras (webcams, drones, pole cams) are only frame sources — this server is
 the single authority that processes frames and raises alarms.
@@ -11,6 +11,13 @@ GET  /health                    -> {"ok": true, "detector": "...", "uptime_s": n
 POST /detect?camera_id=CAM-1    body: JPEG bytes
                                 -> {"detections": [{x,y,w,h,confidence,label}],
                                     "alarm": bool, "detector": "..."}
+
+GET  /reports                   -> {"reports": [...]}
+POST /reports                   body: {lat, lng, description, contact?, photo_base64?}
+                                -> the created report (201)
+POST /reports/<id>/status       body: {"status": "new"|"acknowledged"|"false_alarm"}
+                                -> the updated report
+GET  /uploads/reports/<file>    -> the JPEG for a report's attached photo
 
 Detector:
   * If server/models/best.pt exists and ultralytics is installed, a YOLOv8
@@ -28,10 +35,13 @@ and replace detect() with your inference — the HTTP contract stays identical.
 from __future__ import annotations
 
 import argparse
+import base64
 import io
 import json
+import re
 import threading
 import time
+import uuid
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -39,6 +49,8 @@ from urllib.parse import parse_qs, urlparse
 
 import numpy as np
 from PIL import Image
+
+import store
 
 try:
     import torch
@@ -59,6 +71,10 @@ MAX_HISTORY_S = 30.0   # prune per-camera history older than this
 MODEL_PATH = Path(__file__).resolve().with_name("models") / "best.pt"
 FIRE_CONF_THRESHOLD = 0.20
 SMOKE_CONF_THRESHOLD = 0.30
+
+REPORT_PHOTO_MAX_DIM = 1600   # px, longest side, before saving to disk
+REPORT_PHOTO_MAX_BYTES = 8 * 1024 * 1024  # 8MB decoded ceiling
+UPLOAD_FILENAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 # --------------------------------------------------------------------------
 # Model loading
@@ -81,9 +97,9 @@ def load_model():
 
         _model = YOLO(str(MODEL_PATH), verbose=False)
         DETECTOR_NAME = "yolov8-fire-smoke"
-        print(f"[pyrophyte] loaded model: {MODEL_PATH}")
+        print(f"[firedetect] loaded model: {MODEL_PATH}")
     except Exception as e:
-        print(f"[pyrophyte] failed to load {MODEL_PATH}: {e}; using heuristic fallback")
+        print(f"[firedetect] failed to load {MODEL_PATH}: {e}; using heuristic fallback")
 
 
 # --------------------------------------------------------------------------
@@ -243,6 +259,27 @@ def detect(jpeg_bytes: bytes):
     return _detect_heuristic(jpeg_bytes)
 
 
+def save_report_photo(photo_b64: str) -> str:
+    """Decode a base64 (optionally data-URL prefixed) photo, downscale, save as JPEG.
+
+    Returns the saved filename. Raises ValueError on invalid/oversized input.
+    """
+    if "," in photo_b64 and photo_b64.strip().startswith("data:"):
+        photo_b64 = photo_b64.split(",", 1)[1]
+    raw = base64.b64decode(photo_b64, validate=True)
+    if len(raw) > REPORT_PHOTO_MAX_BYTES:
+        raise ValueError("photo too large")
+    img = Image.open(io.BytesIO(raw)).convert("RGB")
+    w, h = img.size
+    longest = max(w, h)
+    if longest > REPORT_PHOTO_MAX_DIM:
+        scale = REPORT_PHOTO_MAX_DIM / longest
+        img = img.resize((max(1, round(w * scale)), max(1, round(h * scale))), Image.BILINEAR)
+    filename = f"{uuid.uuid4().hex}.jpg"
+    img.save(store.UPLOADS_DIR / filename, "JPEG", quality=85)
+    return filename
+
+
 # --------------------------------------------------------------------------
 # Alarm authority — temporal persistence per camera
 # --------------------------------------------------------------------------
@@ -268,7 +305,7 @@ START = time.time()
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "PyrophyteDetect/1.0"
+    server_version = "FireDetectServer/1.0"
 
     # silence per-request logging
     def log_message(self, *_):
@@ -288,13 +325,30 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _file(self, code: int, content_type: str, data: bytes):
+        self.send_response(code)
+        self._cors()
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _read_json_body(self) -> dict:
+        length = int(self.headers.get("Content-Length", "0"))
+        body = self.rfile.read(length)
+        if not body:
+            raise ValueError("empty body")
+        return json.loads(body)
+
     def do_OPTIONS(self):
         self.send_response(204)
         self._cors()
         self.end_headers()
 
     def do_GET(self):
-        if urlparse(self.path).path == "/health":
+        parsed = urlparse(self.path)
+        path = parsed.path
+        if path == "/health":
             self._json(
                 200,
                 {
@@ -304,12 +358,35 @@ class Handler(BaseHTTPRequestHandler):
                     "cameras_tracked": len(_history),
                 },
             )
+        elif path == "/reports":
+            self._json(200, {"reports": store.list_reports()})
+        elif path.startswith("/uploads/reports/"):
+            filename = path[len("/uploads/reports/") :]
+            if not UPLOAD_FILENAME_RE.match(filename):
+                self._json(400, {"error": "invalid filename"})
+                return
+            file_path = store.UPLOADS_DIR / filename
+            if not file_path.is_file():
+                self._json(404, {"error": "not found"})
+                return
+            self._file(200, "image/jpeg", file_path.read_bytes())
         else:
             self._json(404, {"error": "not found"})
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path != "/detect":
+        path = parsed.path
+
+        if path == "/reports":
+            self._handle_create_report()
+            return
+
+        m = re.match(r"^/reports/([A-Za-z0-9_-]+)/status$", path)
+        if m:
+            self._handle_update_report_status(m.group(1))
+            return
+
+        if path != "/detect":
             self._json(404, {"error": "not found"})
             return
         camera_id = parse_qs(parsed.query).get("camera_id", ["unknown"])[0]
@@ -329,6 +406,49 @@ class Handler(BaseHTTPRequestHandler):
             {"detections": detections, "alarm": alarm, "detector": DETECTOR_NAME},
         )
 
+    def _handle_create_report(self):
+        try:
+            payload = self._read_json_body()
+            lat = float(payload["lat"])
+            lng = float(payload["lng"])
+            description = str(payload.get("description", "")).strip()
+            if not description:
+                raise ValueError("description is required")
+            contact = payload.get("contact")
+            contact = str(contact).strip() if contact else None
+        except Exception as e:  # noqa: BLE001
+            self._json(400, {"error": f"invalid report: {e}"})
+            return
+
+        photo_filename = None
+        photo_b64 = payload.get("photo_base64")
+        if photo_b64:
+            try:
+                photo_filename = save_report_photo(photo_b64)
+            except Exception as e:  # noqa: BLE001
+                self._json(400, {"error": f"invalid photo: {e}"})
+                return
+
+        report = store.insert_report(lat, lng, description, contact, photo_filename)
+        self._json(201, report)
+
+    def _handle_update_report_status(self, report_id: str):
+        try:
+            payload = self._read_json_body()
+            status = str(payload["status"])
+        except Exception as e:  # noqa: BLE001
+            self._json(400, {"error": f"invalid request: {e}"})
+            return
+        try:
+            report = store.update_report_status(report_id, status)
+        except ValueError as e:
+            self._json(400, {"error": str(e)})
+            return
+        if report is None:
+            self._json(404, {"error": "report not found"})
+            return
+        self._json(200, report)
+
 
 def main():
     ap = argparse.ArgumentParser(description="PYROPHYTE detection server")
@@ -337,10 +457,11 @@ def main():
     args = ap.parse_args()
 
     load_model()
+    store.init_db()
 
     server = ThreadingHTTPServer((args.host, args.port), Handler)
-    print(f"[pyrophyte] detection server on http://{args.host}:{args.port}")
-    print(f"[pyrophyte] detector: {DETECTOR_NAME} — POST /detect?camera_id=<id>")
+    print(f"[firedetect] detection server on http://{args.host}:{args.port}")
+    print(f"[firedetect] detector: {DETECTOR_NAME} — POST /detect?camera_id=<id>")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

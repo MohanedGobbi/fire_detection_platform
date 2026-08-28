@@ -5,21 +5,25 @@ import { CameraRail } from "@/components/CameraRail";
 import { TopBar } from "@/components/TopBar";
 import { CameraDetailPanel, EventLog } from "@/components/StatusPanels";
 import { useCameras } from "@/hooks/useCameras";
+import { useLanguage } from "@/hooks/useLanguage";
+import { DETECTION_SERVER } from "@/lib/config";
+import { localizeCamera } from "@/lib/demoCameras";
 import type { CameraConfig, DetectionSettings } from "@/types/camera";
-import { Plus } from "lucide-react";
+import { Plus, Sparkles } from "lucide-react";
 
-const DETECTION_SERVER = "http://127.0.0.1:8700";
-
-export default function Home() {
+export default function Dashboard() {
+  const { t, lang } = useLanguage();
   const {
-    cameras,
+    cameras: rawCameras,
     streams,
     events,
     addCamera,
     updateCamera,
     removeCamera,
+    loadDemoCameras,
     reportStream,
   } = useCameras();
+  const cameras = rawCameras.map((c) => localizeCamera(c, lang));
 
   const [selectedId, setSelectedId] = useState<string>();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -31,7 +35,9 @@ export default function Home() {
     serverUrl: DETECTION_SERVER,
   };
 
-  const selected = cameras.find((c) => c.id === selectedId);
+  // default to the first camera so a populated wall shows immediately,
+  // without forcing a click before anything renders
+  const selected = cameras.find((c) => c.id === selectedId) ?? cameras[0];
   const others = cameras.filter((c) => c.id !== selected?.id);
 
   const openAdd = () => {
@@ -39,7 +45,9 @@ export default function Home() {
     setDialogOpen(true);
   };
   const openEdit = (cam: CameraConfig) => {
-    setEditing(cam);
+    // always edit the raw (untranslated) record — a localized display copy
+    // must never round-trip back into storage as the "real" name/location
+    setEditing(rawCameras.find((c) => c.id === cam.id) ?? cam);
     setDialogOpen(true);
   };
 
@@ -64,7 +72,6 @@ export default function Home() {
         streams={streams}
         detectionEnabled={detectionEnabled}
         onDetectionToggle={setDetectionEnabled}
-        serverUrl={DETECTION_SERVER}
       />
 
       <div className="flex min-h-0 flex-1">
@@ -85,13 +92,13 @@ export default function Home() {
               <div className="border-b hairline bg-coal">
                 <div className="flex items-center justify-between px-4 py-2">
                   <span className="micro-label">
-                    Primary Feed — {selected.name}
+                    {t.dashboard.primaryFeed} — {selected.name}
                   </span>
                   <button
                     onClick={() => openEdit(selected)}
                     className="text-[10px] font-semibold tracking-[0.14em] text-ash transition-colors hover:text-bone"
                   >
-                    CONFIGURE
+                    {t.dashboard.configure}
                   </button>
                 </div>
                 <CameraFeed
@@ -109,7 +116,7 @@ export default function Home() {
                       <button
                         key={c.id}
                         onClick={() => setSelectedId(c.id)}
-                        className="group relative overflow-hidden rounded-sm border hairline bg-coal text-left transition-colors hover:border-[var(--indigo)]/50"
+                        className="group relative overflow-hidden rounded-sm border hairline bg-coal text-left transition-colors hover:border-[var(--pine)]/50"
                       >
                         <CameraFeed
                           camera={c}
@@ -121,7 +128,7 @@ export default function Home() {
                   </div>
                 ) : (
                   <p className="px-2 py-4 text-xs text-ash">
-                    Add more cameras to build out the monitoring wall.
+                    {t.dashboard.addMoreCameras}
                   </p>
                 )}
               </div>
@@ -129,23 +136,27 @@ export default function Home() {
           ) : (
             <div className="flex flex-1 items-center justify-center">
               <div className="max-w-sm text-center">
-                <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-md border hairline bg-coal">
+                <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center border hairline bg-coal">
                   <Plus className="h-5 w-5 text-bone" />
                 </div>
-                <h2 className="font-display text-2xl font-extrabold tracking-tight text-bone">
-                  No camera selected
+                <h2 className="font-display text-2xl font-black tracking-tight text-bone">
+                  {t.dashboard.noCameraSelectedTitle}
                 </h2>
                 <p className="mx-auto mt-3 text-sm leading-relaxed text-ash">
-                  Add your first camera — this PC's webcam works out of the box
-                  for testing. Frames are analyzed by the detection server,
-                  which alone raises fire alarms.
+                  {t.dashboard.noCameraSelectedBody}
                 </p>
-                <button
-                  onClick={openAdd}
-                  className="mt-6 rounded-sm bg-primary px-5 py-2.5 text-[11px] font-semibold tracking-[0.14em] text-white transition-opacity hover:opacity-85"
-                >
-                  ADD CAMERA
-                </button>
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                  <button onClick={openAdd} className="btn-plate bg-primary text-white hover:opacity-90">
+                    {t.dashboard.addCameraCta}
+                  </button>
+                  <button
+                    onClick={loadDemoCameras}
+                    className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] text-ash transition-colors hover:text-bone"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {t.dashboard.loadDemoCameras}
+                  </button>
+                </div>
               </div>
             </div>
           )}

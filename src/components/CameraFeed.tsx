@@ -6,7 +6,8 @@ import type {
   DetectionSettings,
   StreamInfo,
 } from "@/types/camera";
-import { SOURCE_LABEL } from "@/types/camera";
+import { DemoFeed } from "@/components/DemoFeed";
+import { useLanguage } from "@/hooks/useLanguage";
 
 interface Props {
   camera: CameraConfig;
@@ -16,11 +17,11 @@ interface Props {
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  idle: "#6E6E67",
-  connecting: "#D97706",
-  live: "#16A34A",
-  error: "#DC2626",
-  denied: "#DC2626",
+  idle: "var(--ash)",
+  connecting: "var(--amber)",
+  live: "var(--phosphor)",
+  error: "var(--ember)",
+  denied: "var(--ember)",
 };
 
 const DETECT_INTERVAL_MS = 800;
@@ -70,6 +71,7 @@ function useFps(
 }
 
 export function CameraFeed({ camera, detection, large, onStream }: Props) {
+  const { t } = useLanguage();
   const videoRef = useRef<HTMLVideoElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const [status, setStatus] = useState<StreamInfo["status"]>("connecting");
@@ -113,9 +115,12 @@ export function CameraFeed({ camera, detection, large, onStream }: Props) {
 
     report({ status: "connecting" });
 
-    if (camera.type === "webcam") {
+    if (camera.type === "demo") {
+      report({ status: "live", detail: t.cameraFeed.demoPlaceholder });
+      return;
+    } else if (camera.type === "webcam") {
       if (!navigator.mediaDevices?.getUserMedia) {
-        report({ status: "error", detail: "getUserMedia not supported in this browser" });
+        report({ status: "error", detail: t.cameraFeed.getUserMediaUnsupported });
         return;
       }
       navigator.mediaDevices
@@ -150,14 +155,14 @@ export function CameraFeed({ camera, detection, large, onStream }: Props) {
         .catch((err: DOMException) => {
           if (cancelled) return;
           if (err.name === "NotAllowedError")
-            report({ status: "denied", detail: "permission denied" });
+            report({ status: "denied", detail: t.cameraFeed.permissionDenied.toLowerCase() });
           else if (err.name === "NotFoundError")
-            report({ status: "error", detail: "no camera device found" });
+            report({ status: "error", detail: t.cameraFeed.noDeviceFound });
           else report({ status: "error", detail: err.message });
         });
     } else if (camera.type === "hls") {
       if (!video || !camera.url) {
-        report({ status: "error", detail: "missing stream URL" });
+        report({ status: "error", detail: t.cameraFeed.missingStreamUrl });
         return;
       }
       if (Hls.isSupported()) {
@@ -176,7 +181,7 @@ export function CameraFeed({ camera, detection, large, onStream }: Props) {
         video.src = camera.url;
         video.play().catch(() => {});
       } else {
-        report({ status: "error", detail: "HLS not supported in this browser" });
+        report({ status: "error", detail: t.cameraFeed.hlsUnsupported });
       }
     }
     /* mjpeg handled by <img> below */
@@ -192,7 +197,7 @@ export function CameraFeed({ camera, detection, large, onStream }: Props) {
 
   /* ---------------- server-side detection loop ---------------- */
   useEffect(() => {
-    if (!detection.enabled || status !== "live") {
+    if (!detection.enabled || status !== "live" || camera.type === "demo") {
       setDetections([]);
       setAlarmState(false);
       setDetOffline(undefined);
@@ -229,7 +234,7 @@ export function CameraFeed({ camera, detection, large, onStream }: Props) {
       try {
         ctx.drawImage(media, 0, 0, canvas.width, canvas.height);
       } catch {
-        setDetOffline("frame blocked by CORS");
+        setDetOffline(t.cameraFeed.corsBlocked);
         busy = false;
         return;
       }
@@ -263,7 +268,7 @@ export function CameraFeed({ camera, detection, large, onStream }: Props) {
         if (stopped) return;
         failures++;
         if (failures >= 3) {
-          setDetOffline("detection server unreachable");
+          setDetOffline(t.cameraFeed.serverUnreachable);
           setDetections([]);
         }
       } finally {
@@ -285,7 +290,9 @@ export function CameraFeed({ camera, detection, large, onStream }: Props) {
   return (
     <div className="relative overflow-hidden bg-neutral-900" style={{ aspectRatio: "16 / 9" }}>
       {/* real video surface */}
-      {camera.type === "mjpeg" ? (
+      {camera.type === "demo" ? (
+        <DemoFeed seed={camera.id} />
+      ) : camera.type === "mjpeg" ? (
         <img
           ref={imgRef}
           src={camera.url}
@@ -294,7 +301,7 @@ export function CameraFeed({ camera, detection, large, onStream }: Props) {
           className="h-full w-full object-cover"
           onLoad={() => report({ status: "live" })}
           onError={() =>
-            report({ status: "error", detail: `cannot reach ${camera.url}` })
+            report({ status: "error", detail: `${t.cameraFeed.cannotReachStream}: ${camera.url}` })
           }
         />
       ) : (
@@ -313,7 +320,7 @@ export function CameraFeed({ camera, detection, large, onStream }: Props) {
               report({ status: "live" });
             }
           }}
-          onError={() => report({ status: "error", detail: "stream unavailable" })}
+          onError={() => report({ status: "error", detail: t.cameraFeed.streamUnavailable })}
         />
       )}
 
@@ -322,13 +329,13 @@ export function CameraFeed({ camera, detection, large, onStream }: Props) {
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-neutral-100">
           {status === "connecting" ? (
             <>
-              <span className="h-4 w-4 animate-spin rounded-full border border-amber-600 border-t-transparent" />
-              <span className="micro-label">Connecting</span>
+              <span className="h-4 w-4 animate-spin rounded-full border border-[var(--amber)] border-t-transparent" />
+              <span className="micro-label">{t.cameraFeed.connecting}</span>
             </>
           ) : (
             <>
-              <span className="text-[10px] font-semibold tracking-[0.18em] text-red-600">
-                {status === "denied" ? "PERMISSION DENIED" : "STREAM OFFLINE"}
+              <span className="text-[10px] font-semibold tracking-[0.18em] text-[var(--ember)]">
+                {status === "denied" ? t.cameraFeed.permissionDenied : t.cameraFeed.streamOffline}
               </span>
               <span className="max-w-[80%] text-center text-[9px] leading-relaxed text-neutral-500">
                 {error}
@@ -340,7 +347,7 @@ export function CameraFeed({ camera, detection, large, onStream }: Props) {
 
       {/* server-returned detection boxes */}
       {detections.map((d, i) => {
-        const c = d.label === "fire" ? "#DC2626" : "#D97706";
+        const c = d.label === "fire" ? "var(--ember)" : "var(--amber)";
         return (
           <div
             key={i}
@@ -365,10 +372,10 @@ export function CameraFeed({ camera, detection, large, onStream }: Props) {
 
       {/* alarm banner — the detection server's verdict */}
       {alarm && (
-        <div className="absolute inset-x-0 top-0 flex items-center justify-center gap-2 bg-red-600/95 py-1">
+        <div className="absolute inset-x-0 top-0 flex items-center justify-center gap-2 bg-[var(--ember)]/95 py-1">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
           <span className={`${large ? "text-[11px]" : "text-[9px]"} font-bold tracking-[0.2em] text-white`}>
-            FIRE ALARM — SERVER CONFIRMED
+            {t.cameraFeed.fireAlarmBanner}
           </span>
         </div>
       )}
@@ -380,7 +387,7 @@ export function CameraFeed({ camera, detection, large, onStream }: Props) {
             width: 7,
             height: 7,
             borderRadius: 9999,
-            background: alarm ? "#DC2626" : color,
+            background: alarm ? "var(--ember)" : color,
             display: "inline-block",
           }}
         />
@@ -401,29 +408,31 @@ export function CameraFeed({ camera, detection, large, onStream }: Props) {
       <div
         className={`absolute bottom-2 left-3 ${large ? "text-[11px]" : "text-[9px]"} leading-relaxed text-white/75 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]`}
       >
-        <div>{SOURCE_LABEL[camera.type]}</div>
+        <div>{t.common.sourceLabel[camera.type]}</div>
         {camera.location && <div>{camera.location}</div>}
       </div>
 
       <div
         className={`absolute bottom-2 right-3 ${large ? "text-[11px]" : "text-[9px]"} font-semibold tracking-[0.16em] drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]`}
-        style={{ color: alarm ? "#FCA5A5" : color }}
+        style={{ color: alarm ? "color-mix(in srgb, var(--ember) 55%, white)" : color }}
       >
         {alarm
-          ? "ALARM"
+          ? t.common.alarmTag
           : status === "live"
-            ? `LIVE${resolution ? ` · ${resolution}` : ""}${fps ? ` · ${fps}FPS` : ""}`
+            ? camera.type === "demo"
+              ? t.cameraFeed.demo
+              : `${t.cameraFeed.live}${resolution ? ` · ${resolution}` : ""}${fps ? ` · ${fps}FPS` : ""}`
             : status.toUpperCase()}
       </div>
 
-      {/* detection pipeline status tag */}
-      {detection.enabled && status === "live" && (
+      {/* detection pipeline status tag — demo feeds are never sent for analysis */}
+      {detection.enabled && status === "live" && camera.type !== "demo" && (
         <div
           className={`absolute bottom-2 left-1/2 -translate-x-1/2 ${large ? "text-[9px]" : "text-[8px]"} tracking-[0.14em] drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] ${
-            detOffline ? "text-amber-400" : "text-white/50"
+            detOffline ? "text-[var(--amber)]" : "text-white/50"
           }`}
         >
-          {detOffline ? `AI: ${detOffline.toUpperCase()}` : "AI: SERVER ANALYZING"}
+          {detOffline ? `AI: ${detOffline.toUpperCase()}` : t.cameraFeed.aiAnalyzing}
         </div>
       )}
     </div>

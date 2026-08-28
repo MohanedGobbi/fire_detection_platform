@@ -4,38 +4,57 @@
 
 @layer base {
   :root {
-    /* minimal design system — light, restrained, whitespace-driven */
-    --background: 60 9% 95.7%; /* #F4F4F1 surface */
-    --foreground: 60 9% 4.5%; /* #0C0C09 text */
-    --card: 0 0% 100%;
-    --card-foreground: 60 9% 4.5%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 60 9% 4.5%;
-    --primary: 60 9% 4.5%; /* #0C0C09 */
-    --primary-foreground: 0 0% 100%;
-    --secondary: 244 48% 34%; /* #312C85 */
-    --secondary-foreground: 0 0% 100%;
-    --muted: 60 6% 92%;
-    --muted-foreground: 60 2% 43%; /* #6E6E67 */
-    --accent: 60 6% 92%;
-    --accent-foreground: 60 9% 4.5%;
-    --destructive: 0 72% 51%; /* #DC2626 */
-    --destructive-foreground: 0 0% 100%;
-    --border: 60 6% 88%;
-    --input: 60 6% 88%;
-    --ring: 244 48% 34%;
-    --radius: 4px;
+    /* FireDetect — a US land-agency instrument, not a SaaS dashboard.
+       Warm brochure paper, deep pine institutional green, and the real
+       National Fire Danger Rating System's five-color scale reserved
+       strictly for status — never used decoratively. */
+    --background: 42 34% 93%; /* warm parchment paper */
+    --foreground: 30 12% 11%; /* near-black warm ink */
+    --card: 40 30% 98%;
+    --card-foreground: 30 12% 11%;
+    --popover: 40 30% 98%;
+    --popover-foreground: 30 12% 11%;
+    --primary: 156 46% 15%; /* deep pine */
+    --primary-foreground: 42 34% 96%;
+    --secondary: 30 12% 11%;
+    --secondary-foreground: 42 34% 96%;
+    --muted: 40 24% 89%;
+    --muted-foreground: 30 8% 40%;
+    --accent: 40 24% 89%;
+    --accent-foreground: 30 12% 11%;
+    --destructive: 357 55% 42%; /* NFDRS extreme red */
+    --destructive-foreground: 42 34% 96%;
+    --border: 38 24% 82%;
+    --input: 38 24% 82%;
+    --ring: 156 46% 15%;
+    --radius: 3px;
 
-    /* semantic tokens (component aliases kept stable) */
-    --ember: #dc2626; /* danger */
-    --amber: #d97706; /* warning */
-    --phosphor: #16a34a; /* success */
-    --bone: #0c0c09; /* text */
-    --ash: #6e6e67; /* muted text */
-    --coal: #ffffff; /* panel */
-    --soot: #f4f4f1; /* surface / hover */
-    --indigo: #312c85; /* accent */
-    --hairline: #e4e4dd;
+    /* named tokens */
+    --paper: hsl(var(--background));
+    --panel: hsl(var(--card));
+    --ink: hsl(var(--foreground));
+    --slate: hsl(var(--muted-foreground));
+    --pine: hsl(var(--primary));
+    --pine-deep: #0e2a20;
+    --hairline: hsl(var(--border));
+
+    /* the National Fire Danger Rating System's own five levels — the one
+       color law used everywhere status appears, never decoration */
+    --danger-low: #4c8f5b; /* green  — acknowledged / handled */
+    --danger-moderate: #3c74a6; /* blue */
+    --danger-high: #c99a16; /* gold */
+    --danger-veryhigh: #c96a1f; /* orange — recently alarmed / unverified */
+    --danger-extreme: #b9282a; /* red    — active alarm */
+
+    /* legacy aliases — existing components read these names */
+    --ember: var(--danger-extreme);
+    --amber: var(--danger-veryhigh);
+    --phosphor: var(--danger-low);
+    --bone: var(--ink);
+    --ash: var(--slate);
+    --coal: var(--panel);
+    --soot: var(--paper);
+    --indigo: var(--pine);
   }
 }
 
@@ -50,27 +69,41 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: "Open Sans", system-ui, sans-serif;
+    font-family: "Public Sans", system-ui, sans-serif;
     font-feature-settings: "tnum";
     -webkit-font-smoothing: antialiased;
   }
   ::selection {
-    background: var(--indigo);
+    background: var(--pine);
     color: #fff;
   }
   :focus-visible {
-    outline: 2px solid var(--indigo);
+    outline: 2px solid var(--pine);
     outline-offset: 1px;
+  }
+
+  /* Arabic — Cairo carries both display and body roles; Archivo/Public Sans
+     have no Arabic glyphs, so the whole pairing swaps together, not per-role. */
+  html[lang="ar"] body {
+    font-family: "Cairo", system-ui, sans-serif;
+  }
+  html[lang="ar"] .font-display {
+    font-family: "Cairo", system-ui, sans-serif;
+  }
+  html[lang="ar"] .micro-label {
+    font-family: "Cairo", system-ui, sans-serif;
+    letter-spacing: 0;
   }
 }
 
 @layer utilities {
   .font-display {
-    font-family: "Inter", system-ui, sans-serif;
+    font-family: "Archivo", system-ui, sans-serif;
   }
   .micro-label {
-    font-family: "Inconsolata", ui-monospace, monospace;
+    font-family: "Public Sans", system-ui, sans-serif;
     font-size: 11px;
+    font-weight: 700;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--ash);
@@ -90,15 +123,118 @@
   .text-ash {
     color: var(--ash);
   }
+  .text-pine {
+    color: var(--pine);
+  }
   .bg-coal {
     background-color: var(--coal);
   }
   .bg-soot {
     background-color: var(--soot);
   }
+  .bg-pine {
+    background-color: var(--pine);
+  }
   .hairline {
     border-color: var(--hairline);
   }
+
+  /* signage-plate button: a solid color plate with cut, tracked-caps type —
+     the routed-sign register, not a soft rounded SaaS button */
+  .btn-plate {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 1px;
+    padding: 0.85rem 1.75rem;
+    font-family: "Public Sans", system-ui, sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    transition:
+      transform 0.15s ease-out,
+      background-color 0.15s ease-out;
+  }
+  .btn-plate:active {
+    transform: translateY(1px);
+  }
+
+  /* wayfinding label rule shared by nav strips and panel kickers */
+  .wayfinding-rule {
+    border-top: 1px solid currentColor;
+    opacity: 0.35;
+  }
+}
+
+@keyframes pyro-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(185, 40, 42, 0.5), 0 1px 4px rgba(0, 0, 0, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(185, 40, 42, 0), 0 1px 4px rgba(0, 0, 0, 0.35);
+  }
+}
+.pyro-marker-alarm {
+  animation: pyro-pulse 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pyro-marker-alarm {
+    animation: none !important;
+  }
+}
+
+.pyro-marker {
+  transition: transform 0.12s ease-out;
+}
+.pyro-marker:hover {
+  transform: scale(1.2);
+}
+.pyro-report-marker {
+  transform: rotate(45deg);
+}
+.pyro-report-marker:hover {
+  transform: rotate(45deg) scale(1.2);
+}
+
+/* Theme Mapbox's own chrome to the app's tokens instead of its defaults.
+   mapbox-gl.css is imported inside a component (loads after this file in
+   the bundle), so an equal-specificity override loses the cascade tie
+   without !important here — this is the justified, narrow case for it. */
+.mapboxgl-popup-content {
+  padding: 12px 14px !important;
+  border-radius: var(--radius) !important;
+  border: 1px solid var(--hairline) !important;
+  box-shadow: 0 4px 16px rgba(20, 15, 5, 0.16) !important;
+}
+.mapboxgl-popup-tip {
+  border-top-color: var(--coal) !important;
+  border-bottom-color: var(--coal) !important;
+}
+.mapboxgl-popup-close-button {
+  font: 16px/1 system-ui !important;
+  color: var(--ash) !important;
+  padding: 4px 7px !important;
+  top: 2px !important;
+  right: 2px !important;
+}
+.mapboxgl-popup-close-button:hover {
+  color: var(--bone) !important;
+  background: var(--soot) !important;
+}
+.mapboxgl-ctrl-group {
+  border-radius: var(--radius) !important;
+  border: 1px solid var(--hairline) !important;
+  box-shadow: 0 1px 4px rgba(20, 15, 5, 0.16) !important;
+  overflow: hidden;
+}
+.mapboxgl-ctrl-group button + button {
+  border-top: 1px solid var(--hairline) !important;
+}
+.mapboxgl-ctrl-attrib {
+  font-size: 10px !important;
 }
 
 @keyframes alert-in {
@@ -115,13 +251,21 @@
   animation: alert-in 0.25s ease-out both;
 }
 
-/* thin scrollbars for rails */
+/* scrollbars hidden everywhere — scrolling still works, the bar just never
+   renders (rails, nav overflow, dialogs, and the page itself) */
+html {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* old Edge/IE */
+}
+html::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+.thin-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
 .thin-scroll::-webkit-scrollbar {
-  width: 4px;
-}
-.thin-scroll::-webkit-scrollbar-thumb {
-  background: #d8d8d0;
-}
-.thin-scroll::-webkit-scrollbar-track {
-  background: transparent;
+  width: 0;
+  height: 0;
 }

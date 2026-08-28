@@ -16,9 +16,16 @@ dist-ssr
 server/models/*.pt
 server/models/*.onnx
 
+# Runtime data (reports DB + uploaded photos)
+server/firedetect.db
+server/uploads/
+
 # Python cache
 __pycache__/
 *.py[cod]
+
+# Claude Code local session state
+.claude/scheduled_tasks.lock
 
 # Editor directories and files
 .vscode/*

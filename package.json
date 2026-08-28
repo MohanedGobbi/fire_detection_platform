@@ -1,5 +1,5 @@
 {
-  "name": "my-app",
+  "name": "firedetect",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -45,6 +45,7 @@
     "hls.js": "^1.6.16",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.562.0",
+    "mapbox-gl": "^3.29.0",
     "next-themes": "^0.4.6",
     "react": "^19.2.0",
     "react-day-picker": "^9.13.0",
@@ -60,6 +61,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@types/mapbox-gl": "^3.4.1",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",

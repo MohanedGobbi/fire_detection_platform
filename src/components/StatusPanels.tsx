@@ -1,5 +1,6 @@
 import type { CameraConfig, PlatformEvent, StreamInfo } from "@/types/camera";
-import { SOURCE_LABEL } from "@/types/camera";
+import { useLanguage } from "@/hooks/useLanguage";
+import { localizeEventData } from "@/lib/demoCameras";
 import { CircleAlert, Info, TriangleAlert } from "lucide-react";
 
 const LEVEL_STYLE = {
@@ -11,17 +12,17 @@ const LEVEL_STYLE = {
 /* ---------------------------------------------------------------- */
 
 export function EventLog({ events }: { events: PlatformEvent[] }) {
+  const { t, lang } = useLanguage();
   return (
     <section className="flex min-h-0 flex-1 flex-col border-t hairline">
       <div className="flex items-center justify-between border-b hairline px-4 py-3">
-        <span className="micro-label">Event Log</span>
+        <span className="micro-label">{t.statusPanels.eventLog}</span>
         <span className="text-[10px] tabular-nums text-ash">{events.length}</span>
       </div>
       <div className="thin-scroll min-h-0 flex-1 overflow-y-auto">
         {events.length === 0 && (
           <p className="px-3 py-4 text-[10px] leading-relaxed text-ash">
-            Platform events will appear here — cameras added, streams
-            connected, errors.
+            {t.statusPanels.eventsEmpty}
           </p>
         )}
         {events.map((e) => {
@@ -40,7 +41,7 @@ export function EventLog({ events }: { events: PlatformEvent[] }) {
                     opacity: e.level === "info" ? 0.75 : 1,
                   }}
                 >
-                  {e.message}
+                  {t.formatEvent(localizeEventData(e.data, e.cameraId, lang))}
                 </div>
               </div>
             </div>
@@ -59,12 +60,13 @@ interface DetailProps {
 }
 
 export function CameraDetailPanel({ camera, stream }: DetailProps) {
+  const { t } = useLanguage();
   if (!camera) {
     return (
       <section className="border-b hairline px-4 py-4">
-        <span className="micro-label">Stream Detail</span>
+        <span className="micro-label">{t.statusPanels.streamDetail}</span>
         <p className="mt-3 text-[10px] leading-relaxed text-ash">
-          Select a camera to inspect its connection.
+          {t.statusPanels.selectCamera}
         </p>
       </section>
     );
@@ -83,28 +85,27 @@ export function CameraDetailPanel({ camera, stream }: DetailProps) {
   return (
     <section className="border-b hairline px-4 py-4">
       <div className="flex items-center justify-between">
-        <span className="micro-label">Stream Detail</span>
+        <span className="micro-label">{t.statusPanels.streamDetail}</span>
         <span className="text-[10px] font-bold tracking-[0.16em]" style={{ color }}>
-          {alarm ? "FIRE ALARM" : status.toUpperCase()}
+          {alarm ? t.statusPanels.fireAlarmTag : status.toUpperCase()}
         </span>
       </div>
       {alarm && (
         <p className="mt-2 rounded-sm bg-red-50 px-2 py-1.5 text-[11px] font-medium leading-snug text-red-700">
-          The detection server confirmed a fire signature on this feed across
-          consecutive frames.
+          {t.statusPanels.fireAlarmBody}
         </p>
       )}
       <div className="mt-2 truncate font-display text-base font-black uppercase tracking-[0.06em] text-bone">
         {camera.name}
       </div>
       <dl className="mt-3 grid gap-y-1.5 text-[10px]">
-        <Row k="ID" v={camera.id} />
-        <Row k="SOURCE" v={SOURCE_LABEL[camera.type]} />
-        {camera.url && <Row k="URL" v={camera.url} />}
-        {stream?.detail && <Row k="SIGNAL" v={stream.detail} />}
-        {camera.location && <Row k="LOCATION" v={camera.location} />}
+        <Row k={t.statusPanels.idLabel} v={camera.id} />
+        <Row k={t.statusPanels.sourceLabel} v={t.common.sourceLabel[camera.type]} />
+        {camera.url && <Row k={t.statusPanels.urlLabel} v={camera.url} />}
+        {stream?.detail && <Row k={t.statusPanels.signalLabel} v={stream.detail} />}
+        {camera.location && <Row k={t.statusPanels.locationLabel} v={camera.location} />}
         <Row
-          k="ADDED"
+          k={t.statusPanels.addedLabel}
           v={new Date(camera.createdAt).toISOString().slice(0, 10)}
         />
       </dl>

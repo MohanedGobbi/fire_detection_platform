@@ -1,15 +1,23 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   CameraConfig,
   EventLevel,
   PlatformEvent,
+  PlatformEventData,
   StreamInfo,
   StreamStatus,
 } from "@/types/camera";
+import { DEMO_CAMERA_SEEDS } from "@/lib/demoCameras";
 
-const STORAGE_KEY = "pyrophyte.cameras.v1";
+const STORAGE_KEY = "firedetect.cameras.v1";
+const LAST_ALARM_KEY = "firedetect.lastAlarm.v1";
 
 let eventSeq = 1;
+
+export interface LastAlarm {
+  active: boolean;
+  at: number; // ms epoch of the last alarm transition
+}
 
 function loadCameras(): CameraConfig[] {
   try {
@@ -19,6 +27,17 @@ function loadCameras(): CameraConfig[] {
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
+  }
+}
+
+export function loadLastAlarms(): Record<string, LastAlarm> {
+  try {
+    const raw = localStorage.getItem(LAST_ALARM_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
   }
 }
 
@@ -42,10 +61,10 @@ export function useCameras() {
   };
 
   const log = useCallback(
-    (level: EventLevel, message: string, cameraId?: string) => {
+    (level: EventLevel, data: PlatformEventData, cameraId?: string) => {
       setEvents((e) =>
         [
-          { id: eventSeq++, time: new Date(), level, cameraId, message },
+          { id: eventSeq++, time: new Date(), level, cameraId, data },
           ...e,
         ].slice(0, 100)
       );
@@ -61,7 +80,7 @@ export function useCameras() {
         createdAt: Date.now(),
       };
       persist([...camsRef.current, cam]);
-      log("info", `Camera added — ${cam.name} (${cam.type.toUpperCase()})`, cam.id);
+      log("info", { kind: "cameraAdded", name: cam.name, type: cam.type }, cam.id);
       return cam;
     },
     [log]
@@ -70,10 +89,29 @@ export function useCameras() {
   const updateCamera = useCallback(
     (id: string, patch: Partial<CameraConfig>) => {
       persist(camsRef.current.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-      log("info", `Camera updated — ${patch.name ?? id}`, id);
+      log("info", { kind: "cameraUpdated", name: patch.name ?? id }, id);
     },
     [log]
   );
+
+  const loadDemoCameras = useCallback(() => {
+    const existingIds = new Set(camsRef.current.map((c) => c.id));
+    const toAdd = DEMO_CAMERA_SEEDS.filter((c) => !existingIds.has(c.id)).map((c) => ({
+      ...c,
+      createdAt: Date.now(),
+    }));
+    if (toAdd.length === 0) return;
+    persist([...camsRef.current, ...toAdd]);
+    log("info", { kind: "demoCamerasLoaded", count: toAdd.length });
+  }, [log]);
+
+  /* first-ever visit (localStorage key never set) — seed the wall with
+     showcase cameras once so it doesn't start empty; a user who later
+     clears their list has written the key and won't be re-seeded */
+  useEffect(() => {
+    if (localStorage.getItem(STORAGE_KEY) === null) loadDemoCameras();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const removeCamera = useCallback(
     (id: string) => {
@@ -86,7 +124,7 @@ export function useCameras() {
       });
       delete lastStatusRef.current[id];
       delete lastAlarmRef.current[id];
-      log("warn", `Camera removed — ${cam?.name ?? id}`, id);
+      log("warn", { kind: "cameraRemoved", name: cam?.name ?? id }, id);
     },
     [log]
   );
@@ -110,15 +148,11 @@ export function useCameras() {
       if (last !== info.status) {
         lastStatusRef.current[id] = info.status;
         if (info.status === "live")
-          log(
-            "info",
-            `Stream live — ${name}${info.detail ? ` · ${info.detail}` : ""}`,
-            id
-          );
+          log("info", { kind: "streamLive", name, detail: info.detail }, id);
         else if (info.status === "error")
-          log("error", `Stream error — ${name}: ${info.detail ?? "unknown"}`, id);
+          log("error", { kind: "streamError", name, detail: info.detail }, id);
         else if (info.status === "denied")
-          log("error", `Webcam permission denied — ${name}`, id);
+          log("error", { kind: "webcamDenied", name }, id);
       }
 
       // server-driven alarm transitions
@@ -126,13 +160,15 @@ export function useCameras() {
       const nowAlarm = info.alarm ?? false;
       if (nowAlarm !== prevAlarm) {
         lastAlarmRef.current[id] = nowAlarm;
-        if (nowAlarm)
-          log(
-            "error",
-            `FIRE ALARM — ${name} · confirmed by detection server`,
-            id
-          );
-        else log("info", `Alarm cleared — ${name}`, id);
+        try {
+          const stored = loadLastAlarms();
+          stored[id] = { active: nowAlarm, at: Date.now() };
+          localStorage.setItem(LAST_ALARM_KEY, JSON.stringify(stored));
+        } catch {
+          /* storage full / private mode — non-fatal */
+        }
+        if (nowAlarm) log("error", { kind: "fireAlarm", name }, id);
+        else log("info", { kind: "alarmCleared", name }, id);
       }
     },
     [log]
@@ -145,6 +181,7 @@ export function useCameras() {
     addCamera,
     updateCamera,
     removeCamera,
+    loadDemoCameras,
     reportStream,
     log,
   };

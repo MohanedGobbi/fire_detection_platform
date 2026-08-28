@@ -1,8 +1,12 @@
-# PYROPHYTE — Fire Detection Platform
+# FireDetect — Early Wildfire Detection Platform
 
-A fire-watch camera platform. Cameras (PC webcam, IP cameras, drones) are only
-frame sources — a local detection server analyzes the frames and is the single
-authority that raises fire alarms.
+An early wildfire/fire detection platform for watch teams covering large
+outdoor areas. Cameras (PC webcam, IP cameras, drones) are only frame sources
+— a local detection server analyzes the frames and is the single authority
+that raises fire alarms. A live map plots camera locations and alarm state
+alongside public fire reports (`/report`), and a marketing landing page
+(`/`) introduces the platform. See [PRODUCT.md](PRODUCT.md) for product
+context.
 
 ## Run it
 
@@ -37,9 +41,11 @@ npm install
 npm run dev
 ```
 
-Open the console, click **ADD**, choose **Webcam** to test with this PC's
+Open `http://localhost:3000` for the landing page, or go straight to
+`/dashboard`, click **ADD**, and choose **Webcam** to test with this PC's
 camera. The top bar shows whether the detection server is connected; the
-switch enables/disables analysis.
+switch enables/disables analysis. `/map` shows camera + report locations
+live; `/report` is the public, no-login fire-report form.
 
 ## Architecture
 
