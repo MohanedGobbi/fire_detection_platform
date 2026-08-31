@@ -1,4 +1,9 @@
-export const DETECTION_SERVER = "http://127.0.0.1:8700";
+// Configurable so a hosted deploy (e.g. Vercel) can point at a real detection
+// server; defaults to the local dev server when unset. A visitor's browser
+// simply can't reach 127.0.0.1:8700, so the app degrades gracefully (no demo
+// cameras ever call this — they're excluded from the detection loop — real
+// added cameras just show "Unreachable"/never alarm).
+export const DETECTION_SERVER = import.meta.env.VITE_DETECTION_SERVER ?? "http://127.0.0.1:8700";
 
 export const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN ?? "";
 
